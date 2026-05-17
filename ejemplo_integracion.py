@@ -251,3 +251,87 @@ ActualizadorRecursos(
 	tamaño_bloque_descarga=4096,  # Bloques pequeños = progreso más granular
 )
 """
+
+# ═══════════════════════════════════════════════════════════════
+# EJEMPLO 9: Integración con menú Herramientas
+# ═══════════════════════════════════════════════════════════════
+"""
+Añade una entrada al menú Herramientas > Actualizar recursos del complemento
+con el nombre del complemento. Al hacer clic, muestra un diálogo de progreso
+y los resultados de la actualización.
+
+VENTAJAS:
+- El usuario puede actualizar manualmente desde el menú
+- Diálogos informativos con los resultados
+- Manejo automático de errores
+- Diálogos bloqueantes (wait for user feedback)
+
+FORMA 1: Usando el parámetro menuHerramientas=True (RECOMENDADO)
+==============================================================
+El menú se crea automáticamente al instanciar el ActualizadorRecursos:
+
+import addonHandler
+import globalPluginHandler
+addonHandler.initTranslation()
+from .actualizadorRecursos import ActualizadorRecursos
+
+class GlobalPlugin(globalPluginHandler.GlobalPlugin):
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		
+		# Crear el actualizador con menuHerramientas=True
+		# El menú se crea automáticamente
+		self._actualizador = ActualizadorRecursos(
+			"mi-usuario",
+			"mi-repo",
+			modo_comprobacion="manual",
+			menuHerramientas=True,  # ← ACTIVAR MENÚ AUTOMÁTICAMENTE
+		)
+	
+	def terminate(self):
+		self._actualizador.detener()
+		super().terminate()
+
+
+FORMA 2: Llamar manualmente (para casos específicos)
+===================================================
+Si necesitas crear el menú después de la instanciación:
+
+self._actualizador = ActualizadorRecursos(
+	"mi-usuario",
+	"mi-repo",
+	modo_comprobacion="manual",
+)
+
+# Crear el menú manualmente más adelante si es necesario
+self._actualizador.integrarMenuHerramientas()
+
+
+RESULTADO EN EL MENÚ:
+=====================
+Menú: Herramientas
+├─ Actualizar recursos del complemento
+│  └─ Nombre del complemento (ejecuta la actualización)
+│  └─ Otro complemento (si hay otro)
+
+
+COMPORTAMIENTO AL HACER CLIC:
+=============================
+1. Se muestra un diálogo de progreso
+2. Durante la descarga se muestra: "Descargando recursos... 25%"
+3. Durante la instalación se muestra: "Instalando traducciones..."
+4. Al finalizar:
+   - Si hay actualizaciones: "Se actualizaron N archivos" + lista de idiomas
+   - Si no hay cambios: "Los recursos ya están actualizados"
+   - Si hay error: "Error al actualizar recursos: [motivo]"
+5. Se sugiere reiniciar NVDA si se instalaron archivos
+
+NOTAS:
+======
+- Este método SOLO funciona dentro de NVDA (requiere las bibliotecas wx y gui)
+- Si se llama fuera de NVDA, se registra un warning y retorna sin hacer nada
+- Los callbacks de progreso/finalización se reemplazan durante la actualización
+- Se restauran los callbacks originales al terminar
+- Si se llama múltiples veces, NO se crean duplicados (verifica que exista)
+- Compatible con menuHerramientas=True en el __init__ (no crea duplicados)
+"""
