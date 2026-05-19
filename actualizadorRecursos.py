@@ -76,9 +76,9 @@ class ActualizadorRecursos:
 		# ── Notificaciones ──
 		"notificar_usuario": False,
 		"notificar_sin_cambios": False,
-		"mensaje_exito": "Recursos del complemento actualizados. Reinicie NVDA para aplicar todos los cambios.",
+		"mensaje_exito": "Recursos del complemento {nombre} actualizados. Reinicie NVDA para aplicar todos los cambios.",
 		"mensaje_sin_cambios": "Los recursos ya están actualizados.",
-		"mensaje_error": "Error al actualizar los recursos del complemento.",
+		"mensaje_error": "Error al actualizar los recursos del complemento {nombre}.",
 		"mensaje_comprobando": "Comprobando actualizaciones de recursos...",
 		"menuHerramientas": False,  # Integrar menú en Herramientas de NVDA
 		
@@ -138,6 +138,7 @@ class ActualizadorRecursos:
 		self._timer = None
 		self._detenido = threading.Event()
 		self._nombre_cache = None
+		self._nombre_publico_cache = None
 		self._dialogo_progreso = None
 		
 		# Encabezados HTTP (con token opcional para repos privados)
@@ -343,7 +344,7 @@ class ActualizadorRecursos:
 					f"hash={estado['hash_combinado'][:16]}..."
 				)
 				if self._config["notificar_usuario"]:
-					self._notificar(self._config["mensaje_exito"])
+					self._notificar(self._formatearMensajePublico(self._config["mensaje_exito"]))
 			else:
 				log.info("ActualizadorRecursos: 0 archivos instalados del paquete")
 				# Aun así guardar el hash del ZIP para no re-descargar
@@ -362,7 +363,7 @@ class ActualizadorRecursos:
 		except Exception as e:
 			log.error(f"ActualizadorRecursos: {e}", exc_info=True)
 			if self._config["notificar_usuario"]:
-				self._notificar(self._config["mensaje_error"])
+				self._notificar(self._formatearMensajePublico(self._config["mensaje_error"]))
 			self._invocarCallback("callback_error", e)
 			self._invocarCallback("callback_finalizado", False, resultado)
 	
@@ -597,7 +598,34 @@ class ActualizadorRecursos:
 			pass
 		self._nombre_cache = os.path.basename(self._ruta_complemento)
 		return self._nombre_cache
-	
+
+	def _obtenerNombrePublico(self) -> str:
+		"""Obtiene el nombre completo del complemento desde manifest.ini (summary)."""
+		if self._nombre_publico_cache:
+			return self._nombre_publico_cache
+		ruta = os.path.join(self._ruta_complemento, "manifest.ini")
+		try:
+			with open(ruta, "r", encoding="utf-8") as f:
+				for linea in f:
+					if linea.strip().startswith("summary"):
+						p = linea.split("=", 1)
+						if len(p) == 2:
+							self._nombre_publico_cache = p[1].strip().strip('"\'')
+							return self._nombre_publico_cache
+		except Exception:
+			pass
+		# fallback al nombre interno si no hay summary
+		self._nombre_publico_cache = self._obtenerNombre()
+		return self._nombre_publico_cache
+
+	def _formatearMensajePublico(self, mensaje: str) -> str:
+		"""Inserta el nombre público del complemento en el mensaje."""
+		nombre = self._obtenerNombrePublico()
+		try:
+			return mensaje.format(nombre=nombre)
+		except Exception:
+			return f"{mensaje} {nombre}"
+
 	def _obtenerInfoRelease(self) -> dict:
 		"""Obtiene URL de descarga y hash remoto desde la release de GitHub.
 		
@@ -867,8 +895,8 @@ class ActualizadorRecursos:
 			else:
 				log.debug("ActualizadorRecursos: submenú 'Actualizar recursos' ya existe")
 			
-			# Agregar item de menú con el nombre del complemento
-			nombre_complemento = self._obtenerNombre()
+			# Agregar item de menú con el nombre completo del complemento (summary)
+			nombre_complemento = self._obtenerNombrePublico()
 			item_id = wx.NewId()
 			submenu_actualizar.Append(
 				item_id,
